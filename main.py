@@ -162,6 +162,7 @@ if __name__ == "__main__":
             params_to_save = policy.get_dict_to_save()
             path_to_save = os.path.join(output_dir, "model_epoch_{}.pth".format(num_epochs))
             torch.save(params_to_save, path_to_save)
+            last_time_saved = time.time()
 
         if avg_success > best_success_rate:
             best_success_rate = avg_success
