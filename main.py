@@ -57,7 +57,11 @@ def setup(name):
     time_str = datetime.datetime.fromtimestamp(t_now).strftime('%Y%m%d%H%M%S')
     exp_dir = os.path.join(FILE_PATH, "./experiments/{}".format(name), time_str)
     os.makedirs(exp_dir)
-    return SummaryWriter(exp_dir)
+
+    output_dir = os.path.join(FILE_PATH, "./trained_models/{}".format(name), time_str)
+    os.makedirs(output_dir)
+
+    return SummaryWriter(exp_dir), output_dir
 
 def make_buffer(hdf5_path):
     """
@@ -107,7 +111,7 @@ if __name__ == "__main__":
     # if not os.path.exists("./results"):
     #     os.makedirs("./results")
 
-    writer = setup(args.name)
+    writer, output_dir = setup(args.name)
 
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
@@ -134,6 +138,8 @@ if __name__ == "__main__":
 
     training_iters = 0
     num_epochs = 0
+    last_time_saved = -1.
+    best_success_rate = 0.
     while training_iters < args.max_timesteps: 
         pol_vals = policy.train(replay_buffer, iterations=int(args.eval_freq))
         avg_reward, avg_success = evaluate_policy(policy)
@@ -150,6 +156,18 @@ if __name__ == "__main__":
         print("Losses: {}".format(pol_vals))
         print("Avg reward: {}, Avg Success: {}".format(avg_reward, avg_success))
         num_epochs += 1
+
+        # save model every hour or when last record is beat
+        if time.time() - last_time_saved > 3600:
+            params_to_save = policy.get_dict_to_save()
+            path_to_save = os.path.join(output_dir, "model_epoch_{}.pth".format(num_epochs))
+            torch.save(params_to_save, path_to_save)
+
+        if avg_success > best_success_rate:
+            best_success_rate = avg_success
+            params_to_save = policy.get_dict_to_save()
+            path_to_save = os.path.join(output_dir, "model_epoch_{}_best_{}.pth".format(num_epochs, avg_success))
+            torch.save(params_to_save, path_to_save)
 
 
 

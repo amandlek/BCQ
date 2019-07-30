@@ -130,6 +130,15 @@ class BCQ(object):
 			ind = q1.max(0)[1]
 		return action[ind].cpu().data.numpy().flatten()
 
+	def get_dict_to_save(self):
+		return {
+			"actor": self.actor.state_dict(),
+			"actor_target": self.actor_target.state_dict(),
+			"critic": self.critic.state_dict(),
+			"critic_target": self.critic_target.state_dict(),
+			"vae": self.vae.state_dict(),
+		}
+
 	def train(self, replay_buffer, iterations, batch_size=100, discount=0.99, tau=0.005):
 
 		iteration_values = {}
