@@ -1,12 +1,13 @@
+import os
+import time
+import datetime
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import utils
 
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 class Actor(nn.Module):
 	def __init__(self, state_dim, action_dim, max_action):
@@ -129,11 +130,10 @@ class BCQ(object):
 			ind = q1.max(0)[1]
 		return action[ind].cpu().data.numpy().flatten()
 
-
 	def train(self, replay_buffer, iterations, batch_size=100, discount=0.99, tau=0.005):
 
+		iteration_values = {}
 		for it in range(iterations):
-
 			# Sample replay buffer / batch
 			state_np, next_state_np, action, reward, done = replay_buffer.sample(batch_size)
 			state 		= torch.FloatTensor(state_np).to(device)
@@ -148,6 +148,8 @@ class BCQ(object):
 			recon_loss = F.mse_loss(recon, action)
 			KL_loss	= -0.5 * (1 + torch.log(std.pow(2)) - mean.pow(2) - std.pow(2)).mean()
 			vae_loss = recon_loss + 0.5 * KL_loss
+
+			iteration_values["vae_loss"] = iteration_values.get("vae_loss", 0.) + vae_loss.item()
 
 			self.vae_optimizer.zero_grad()
 			vae_loss.backward()
@@ -172,6 +174,8 @@ class BCQ(object):
 			current_Q1, current_Q2 = self.critic(state, action)
 			critic_loss = F.mse_loss(current_Q1, target_Q) + F.mse_loss(current_Q2, target_Q)
 
+			iteration_values["critic_loss"] = iteration_values.get("critic_loss", 0.) + critic_loss.item()
+
 			self.critic_optimizer.zero_grad()
 			critic_loss.backward()
 			self.critic_optimizer.step()
@@ -184,6 +188,8 @@ class BCQ(object):
 			# Update through DPG
 			actor_loss = -self.critic.q1(state, perturbed_actions).mean()
 		 	 
+			iteration_values["actor_loss"] = iteration_values.get("actor_loss", 0.) + actor_loss.item()
+
 			self.actor_optimizer.zero_grad()
 			actor_loss.backward()
 			self.actor_optimizer.step()
@@ -195,3 +201,12 @@ class BCQ(object):
 
 			for param, target_param in zip(self.actor.parameters(), self.actor_target.parameters()):
 				target_param.data.copy_(tau * param.data + (1 - tau) * target_param.data)
+
+		# collect and return epoch values
+		for k in iteration_values:
+			iteration_values[k] /= iterations
+		return iteration_values
+
+
+
+
